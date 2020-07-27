@@ -1,0 +1,130 @@
+Major Count Code:
+  SELECT
+    DISTINCT major_category,
+    COUNT(1) OVER (PARTITION BY major_category) AS cnt_mjr
+  FROM
+    `bigquery-public-data.london_crime.crime_by_lsoa`;
+https://console.cloud.google.com/bigquery?sq=406174213762:139fbe790e1d4cd0aeef25313670f3b1
+
+Minor Count Code:
+  SELECT
+    DISTINCT minor_category,
+    COUNT(1) OVER (PARTITION BY minor_category) AS cnt_mnr
+  FROM
+    `bigquery-public-data.london_crime.crime_by_lsoa`;
+https://console.cloud.google.com/bigquery?sq=406174213762:b74a29d66e9b4336991755bdcbef564e
+
+Borough Count Code:
+  SELECT
+    DISTINCT borough,
+    COUNT(1) OVER (PARTITION BY borough) AS cnt_brgh
+  FROM
+    `bigquery-public-data.london_crime.crime_by_lsoa`;
+https://console.cloud.google.com/bigquery?sq=406174213762:ccab386535c4456783f77f287e1bbb0c
+
+Top 3 Categories in Every Borough:
+  WITH
+    t2 AS (
+    WITH
+      t AS (
+      SELECT
+        DISTINCT borough,
+        major_category,
+        COUNT(1) OVER (PARTITION BY borough, major_category) AS cnt_major_borough,
+      FROM
+        `bigquery-public-data.london_crime.crime_by_lsoa`)
+    SELECT
+      *,
+      DENSE_RANK() OVER(PARTITION BY borough ORDER BY cnt_major_borough DESC)AS rank
+    FROM
+      t)
+  SELECT
+    borough,
+    ARRAY(
+    SELECT
+      AS STRUCT major_category,
+      cnt_major_borough
+    FROM
+      t2 b
+    WHERE
+      a.borough = b.borough
+      AND rank <= 3) cnt
+  FROM
+    t2 a
+  WHERE
+    rank = 1;
+https://console.cloud.google.com/bigquery?sq=406174213762:0192172b214d43568693e0180a5c3bd2
+
+Minor Categories and their corresponding Major Category
+  WITH t AS(
+   WITH t2 AS(
+   SELECT DISTINCT major_category, minor_category,
+   FROM `bigquery-public-data.london_crime.crime_by_lsoa`
+   ORDER BY major_category )
+   SELECT *,
+   ROW_NUMBER() OVER(PARTITION BY major_category) AS rownum
+   FROM t2)
+  SELECT major_category,
+   ARRAY(
+   SELECT AS STRUCT minor_category
+   FROM t b
+   WHERE b.major_category = a.major_category) minor_category
+  FROM t a
+  WHERE rownum=1
+https://console.cloud.google.com/bigquery?sq=406174213762:32ceccca26ae44f29010d7d810e3fa0e
+
+Minor Categories that falls under different Buckets accoring to their counts
+  WITH t AS (
+   WITH t2 AS (
+   SELECT DISTINCT minor_category, COUNT(1) OVER (PARTITION BY minor_category) AS cnt_mnr
+   FROM `bigquery-public-data.london_crime.crime_by_lsoa`)
+   SELECT *,
+   CASE
+   WHEN cnt_mnr >= 500000 THEN '>500k'
+   WHEN cnt_mnr >= 400000 THEN '>400k'
+   WHEN cnt_mnr >= 100000 THEN '>100k'
+   ELSE '<100k '
+   END AS bucket
+   FROM t2)
+  SELECT DISTINCT bucket,
+  COUNT(bucket) OVER(PARTITION BY bucket ORDER BY bucket) AS count_bucket
+  FROM t
+  ORDER BY bucket DESC
+https://console.cloud.google.com/bigquery?sq=406174213762:b69e28ee8eea417d9125f975e70c704c
+
+Top 3 Minor Categories in every bucket that has highest crime counts
+  WITH t AS(
+   WITH t2 AS (
+   WITH t3 AS (
+   SELECT DISTINCT minor_category,
+   COUNT(1) OVER (PARTITION BY minor_category) AS cnt_mnr
+   FROM `bigquery-public-data.london_crime.crime_by_lsoa`)
+   SELECT *,
+   CASE
+   WHEN cnt_mnr >= 500000 THEN '>500k'
+   WHEN cnt_mnr >= 400000 THEN '>400k'
+   WHEN cnt_mnr >= 100000 THEN '>100k'
+   ELSE '<100k '
+   END AS bucket
+   FROM t3)
+   SELECT *,
+   DENSE_RANK() OVER(PARTITION BY bucket ORDER BY cnt_mnr) AS rank
+   FROM t2)
+  SELECT bucket,
+   ARRAY(
+   SELECT AS STRUCT ARRAY_AGG(minor_category) as minor_categpry,
+   ARRAY_AGG(cnt_mnr) as count
+   FROM t b
+   WHERE b.bucket = a.bucket
+   AND rank <= 3) bckt
+  FROM t a
+  WHERE rank = 1
+  ORDER BY bucket DESC
+https://console.cloud.google.com/bigquery?sq=406174213762:25db125098544b7b82c79502694df19e
+
+Borough with most LSOA Codes
+  SELECT DISTINCT borough,
+   COUNT(lsoa_code) OVER (PARTITION BY borough) AS cnt_lsoa
+  FROM `bigquery-public-data.london_crime.crime_by_lsoa`
+  ORDER BY cnt_lsoa DESC;
+https://console.cloud.google.com/bigquery?sq=406174213762:d6323cdf8f144bba9cfa36913d4ecc5f
